@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"crypto/ed25519"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -77,6 +80,20 @@ func createTestContext(method, path string, headers map[string]string, body stri
 	ctx.Locals("i18n-language", i18n.LangEN)
 
 	return ctx, app
+}
+
+func testTokenSigningKey(t *testing.T) string {
+	t.Helper()
+	_, privateKey, err := ed25519.GenerateKey(nil)
+	testza.AssertNoError(t, err)
+
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	testza.AssertNoError(t, err)
+
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: der,
+	}))
 }
 
 func TestCheckRoute_Authenticated(t *testing.T) {

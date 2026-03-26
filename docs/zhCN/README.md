@@ -23,6 +23,11 @@
   - 错误响应格式
   - 认证流程示例
 
+- **[TUNNEL_TOKEN_DESIGN.md](TUNNEL_TOKEN_DESIGN.md)** - 面向 tunnel/CLI 的通用短期 Token 设计
+  - Session 到 JWT 的交换能力
+  - `vertex-tunnel` 对接方式
+  - JWT Claims 与迁移计划
+
 - **[CONFIG.md](CONFIG.md)** - 配置参考文档
   - 配置方式
   - 必需配置项
@@ -76,6 +81,7 @@ stargate/
 │       ├── README.md       # 文档索引（中文，本文件）
 │       ├── ARCHITECTURE.md # 架构文档（中文）
 │       ├── API.md          # API 文档（中文）
+│       ├── TUNNEL_TOKEN_DESIGN.md # Tunnel Token 设计（中文）
 │       ├── CONFIG.md       # 配置参考（中文）
 │       └── DEPLOYMENT.md   # 部署指南（中文）
 └── ...

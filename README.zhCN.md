@@ -134,6 +134,7 @@ chmod +x start-local.sh
 
 - 📐 **[架构文档](docs/zhCN/ARCHITECTURE.md)** - 深入了解技术架构和设计决策
 - 🔌 **[API 文档](docs/zhCN/API.md)** - 完整的 API 端点参考和示例
+- 🎫 **[Tunnel Token 设计](docs/zhCN/TUNNEL_TOKEN_DESIGN.md)** - 为 tunnel/CLI 提供通用短期 Token 的设计方案
 - ⚙️ **[配置参考](docs/zhCN/CONFIG.md)** - 详细的配置选项和最佳实践
 - 🚀 **[部署指南](docs/zhCN/DEPLOYMENT.md)** - 生产环境部署策略和建议
 

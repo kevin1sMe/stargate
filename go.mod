@@ -6,6 +6,7 @@ require (
 	github.com/MarvinJWendt/testza v0.5.2
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/gofiber/template v1.7.5
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/pterm/pterm v0.12.83

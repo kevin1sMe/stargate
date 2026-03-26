@@ -14,6 +14,10 @@ const (
 	RouteSessionExchange = "/_session_exchange"
 	// RouteAuth is the authentication check route
 	RouteAuth = "/_auth"
+	// RouteToken is the session-to-token exchange route
+	RouteToken = "/_token"
+	// RouteJWKS is the token public key route
+	RouteJWKS = "/_jwks"
 	// RouteHealth is the health check route
 	RouteHealth = "/health"
 

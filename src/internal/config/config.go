@@ -334,6 +334,62 @@ var (
 		PossibleValues: []string{"true", "false"},
 		Validator:      ValidateCaseInsensitivePossibleValues,
 	}
+
+	TokenSigningKey = EnvVariable{
+		Name:           "TOKEN_SIGNING_KEY",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenSigningKID = EnvVariable{
+		Name:           "TOKEN_SIGNING_KID",
+		Required:       false,
+		DefaultValue:   "stargate-ed25519",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenIssuer = EnvVariable{
+		Name:           "TOKEN_ISSUER",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenMaxTTLSeconds = EnvVariable{
+		Name:           "TOKEN_MAX_TTL_SECONDS",
+		Required:       false,
+		DefaultValue:   "900",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenDefaultTTLSeconds = EnvVariable{
+		Name:           "TOKEN_DEFAULT_TTL_SECONDS",
+		Required:       false,
+		DefaultValue:   "300",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenAllowedAudiences = EnvVariable{
+		Name:           "TOKEN_ALLOWED_AUDIENCES",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	TokenTOTPRequiredAudiences = EnvVariable{
+		Name:           "TOKEN_TOTP_REQUIRED_AUDIENCES",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
 )
 
 func Initialize(l *logger.Logger) error {
@@ -362,7 +418,7 @@ func Initialize(l *logger.Logger) error {
 	}
 
 	// Then validate all other configuration variables
-	var envVariables = []*EnvVariable{&Debug, &AuthHost, &LoginPageTitle, &LoginPageFooterText, &Passwords, &UserHeaderName, &CookieDomain, &Language, &Port, &WardenURL, &WardenAPIKey, &WardenEnabled, &WardenCacheTTL, &WardenOTPEnabled, &WardenOTPSecretKey, &HeraldURL, &HeraldAPIKey, &HeraldEnabled, &HeraldHMACSecret, &HeraldTLSCACertFile, &HeraldTLSClientCert, &HeraldTLSClientKey, &HeraldTLSServerName, &HeraldTOTPEnabled, &SessionStorageEnabled, &SessionStorageRedisAddr, &SessionStorageRedisPassword, &SessionStorageRedisDB, &SessionStorageRedisKeyPrefix, &AuditLogEnabled, &AuditLogFormat, &StepUpEnabled, &StepUpPaths, &OTLPEnabled, &OTLPEndpoint, &AuthRefreshEnabled, &AuthRefreshInterval, &LoginSMSEnabled, &LoginEmailEnabled}
+	var envVariables = []*EnvVariable{&Debug, &AuthHost, &LoginPageTitle, &LoginPageFooterText, &Passwords, &UserHeaderName, &CookieDomain, &Language, &Port, &WardenURL, &WardenAPIKey, &WardenEnabled, &WardenCacheTTL, &WardenOTPEnabled, &WardenOTPSecretKey, &HeraldURL, &HeraldAPIKey, &HeraldEnabled, &HeraldHMACSecret, &HeraldTLSCACertFile, &HeraldTLSClientCert, &HeraldTLSClientKey, &HeraldTLSServerName, &HeraldTOTPEnabled, &SessionStorageEnabled, &SessionStorageRedisAddr, &SessionStorageRedisPassword, &SessionStorageRedisDB, &SessionStorageRedisKeyPrefix, &AuditLogEnabled, &AuditLogFormat, &StepUpEnabled, &StepUpPaths, &OTLPEnabled, &OTLPEndpoint, &AuthRefreshEnabled, &AuthRefreshInterval, &LoginSMSEnabled, &LoginEmailEnabled, &TokenSigningKey, &TokenSigningKID, &TokenIssuer, &TokenMaxTTLSeconds, &TokenDefaultTTLSeconds, &TokenAllowedAudiences, &TokenTOTPRequiredAudiences}
 
 	for _, variable := range envVariables {
 		err := variable.Validate()
@@ -372,7 +428,11 @@ func Initialize(l *logger.Logger) error {
 
 		// Only log non-empty configuration items
 		if variable.Value != "" {
-			log.Info().Str("name", variable.Name).Str("value", variable.Value).Msg("Config loaded")
+			value := variable.Value
+			if isSensitiveConfig(variable.Name) {
+				value = "[redacted]"
+			}
+			log.Info().Str("name", variable.Name).Str("value", value).Msg("Config loaded")
 		}
 	}
 
@@ -390,4 +450,15 @@ func Initialize(l *logger.Logger) error {
 	InitStepUpMatcher()
 
 	return nil
+}
+
+func isSensitiveConfig(name string) bool {
+	name = strings.ToUpper(name)
+	sensitiveKeywords := []string{"PASSWORD", "SECRET", "API_KEY", "SIGNING_KEY", "CLIENT_KEY"}
+	for _, keyword := range sensitiveKeywords {
+		if strings.Contains(name, keyword) {
+			return true
+		}
+	}
+	return false
 }
