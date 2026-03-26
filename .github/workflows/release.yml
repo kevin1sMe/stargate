@@ -115,7 +115,7 @@ jobs:
             BUILD_DATE=${{ steps.version.outputs.build_date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
