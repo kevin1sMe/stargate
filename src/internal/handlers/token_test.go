@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/MarvinJWendt/testza"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/soulteary/stargate/src/internal/auth"
 	"github.com/soulteary/stargate/src/internal/config"
@@ -28,44 +31,76 @@ func setupTokenConfig(t *testing.T) {
 	testza.AssertNoError(t, err)
 }
 
+func createAuthenticatedSessionCookie(t *testing.T, store *session.Store, sessionValues map[string]any) string {
+	t.Helper()
+
+	app := fiber.New()
+	app.Post("/_session", func(ctx *fiber.Ctx) error {
+		sess, err := store.Get(ctx)
+		testza.AssertNoError(t, err)
+
+		for key, value := range sessionValues {
+			sess.Set(key, value)
+		}
+
+		testza.AssertNoError(t, auth.Authenticate(sess))
+		return ctx.SendStatus(fiber.StatusOK)
+	})
+
+	req := httptest.NewRequest("POST", "/_session", nil)
+	resp, err := app.Test(req)
+	testza.AssertNoError(t, err)
+	testza.AssertEqual(t, fiber.StatusOK, resp.StatusCode)
+
+	for _, cookieHeader := range resp.Header.Values("Set-Cookie") {
+		if strings.Contains(cookieHeader, auth.SessionCookieName+"=") {
+			return strings.SplitN(cookieHeader, ";", 2)[0]
+		}
+	}
+
+	t.Fatalf("session cookie %q not found in response", auth.SessionCookieName)
+	return ""
+}
+
 func TestTokenRoute_Success(t *testing.T) {
 	setupTokenConfig(t)
 
 	store := setupTestStore()
-	handler := TokenRoute(store)
+	app := fiber.New()
+	app.Post("/_token", TokenRoute(store))
 
-	ctx, app := createTestContext("POST", "/_token", map[string]string{
-		"Accept":       "application/json",
-		"Content-Type": "application/json",
-	}, `{"audience":"tunnel.mrlin.space","scope":["forward"],"ttl_seconds":600}`)
-	defer app.ReleaseCtx(ctx)
+	sessionCookie := createAuthenticatedSessionCookie(t, store, map[string]any{
+		"user_id":    "u_123",
+		"user_scope": []string{"forward", "admin"},
+		"user_role":  "admin",
+		"user_amr":   []string{"warden", "totp"},
+		"user_mail":  "user@example.com",
+		"user_phone": "13800138000",
+		"user_name":  "Kevin",
+	})
 
-	sess, err := store.Get(ctx)
+	req := httptest.NewRequest("POST", "/_token", strings.NewReader(
+		`{"audience":"tunnel.mrlin.space","scope":["forward"],"ttl_seconds":600}`,
+	))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", sessionCookie)
+
+	httpResp, err := app.Test(req)
 	testza.AssertNoError(t, err)
-	testza.AssertNoError(t, auth.Authenticate(sess))
-	sess.Set("user_id", "u_123")
-	sess.Set("user_scope", []string{"forward", "admin"})
-	sess.Set("user_role", "admin")
-	sess.Set("user_amr", []string{"warden", "totp"})
-	sess.Set("user_mail", "user@example.com")
-	sess.Set("user_phone", "13800138000")
-	sess.Set("user_name", "Kevin")
+	testza.AssertEqual(t, fiber.StatusOK, httpResp.StatusCode)
 
-	err = handler(ctx)
+	var tokenResp internal_token.TokenResponse
+	err = json.NewDecoder(httpResp.Body).Decode(&tokenResp)
 	testza.AssertNoError(t, err)
-	testza.AssertEqual(t, fiber.StatusOK, ctx.Response().StatusCode())
-
-	var resp internal_token.TokenResponse
-	err = json.Unmarshal(ctx.Response().Body(), &resp)
-	testza.AssertNoError(t, err)
-	testza.AssertEqual(t, "Bearer", resp.TokenType)
-	testza.AssertEqual(t, 600, resp.ExpiresIn)
+	testza.AssertEqual(t, "Bearer", tokenResp.TokenType)
+	testza.AssertEqual(t, 600, tokenResp.ExpiresIn)
 
 	issuer, err := internal_token.NewIssuerFromConfig()
 	testza.AssertNoError(t, err)
 
 	claims := &internal_token.Claims{}
-	parsed, err := jwt.ParseWithClaims(resp.Token, claims, func(token *jwt.Token) (any, error) {
+	parsed, err := jwt.ParseWithClaims(tokenResp.Token, claims, func(token *jwt.Token) (any, error) {
 		return issuer.PublicKey(), nil
 	}, jwt.WithIssuer("auth.example.com"), jwt.WithAudience("tunnel.mrlin.space"), jwt.WithValidMethods([]string{"EdDSA"}))
 	testza.AssertNoError(t, err)
@@ -81,41 +116,41 @@ func TestTokenRoute_RequiresAuthentication(t *testing.T) {
 	setupTokenConfig(t)
 
 	store := setupTestStore()
-	handler := TokenRoute(store)
+	app := fiber.New()
+	app.Post("/_token", TokenRoute(store))
 
-	ctx, app := createTestContext("POST", "/_token", map[string]string{
-		"Accept":       "application/json",
-		"Content-Type": "application/json",
-	}, `{"audience":"tunnel.mrlin.space"}`)
-	defer app.ReleaseCtx(ctx)
+	req := httptest.NewRequest("POST", "/_token", strings.NewReader(`{"audience":"tunnel.mrlin.space"}`))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
-	err := handler(ctx)
+	resp, err := app.Test(req)
 	testza.AssertNoError(t, err)
-	testza.AssertEqual(t, fiber.StatusUnauthorized, ctx.Response().StatusCode())
+	testza.AssertEqual(t, fiber.StatusUnauthorized, resp.StatusCode)
 }
 
 func TestTokenRoute_RejectsAudienceWithoutTOTP(t *testing.T) {
 	setupTokenConfig(t)
 
 	store := setupTestStore()
-	handler := TokenRoute(store)
+	app := fiber.New()
+	app.Post("/_token", TokenRoute(store))
 
-	ctx, app := createTestContext("POST", "/_token", map[string]string{
-		"Accept":       "application/json",
-		"Content-Type": "application/json",
-	}, `{"audience":"tunnel.mrlin.space","scope":["forward"]}`)
-	defer app.ReleaseCtx(ctx)
+	sessionCookie := createAuthenticatedSessionCookie(t, store, map[string]any{
+		"user_id":    "u_123",
+		"user_scope": []string{"forward"},
+		"user_amr":   []string{"warden"},
+	})
 
-	sess, err := store.Get(ctx)
+	req := httptest.NewRequest("POST", "/_token", strings.NewReader(
+		`{"audience":"tunnel.mrlin.space","scope":["forward"]}`,
+	))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", sessionCookie)
+
+	resp, err := app.Test(req)
 	testza.AssertNoError(t, err)
-	testza.AssertNoError(t, auth.Authenticate(sess))
-	sess.Set("user_id", "u_123")
-	sess.Set("user_scope", []string{"forward"})
-	sess.Set("user_amr", []string{"warden"})
-
-	err = handler(ctx)
-	testza.AssertNoError(t, err)
-	testza.AssertEqual(t, fiber.StatusForbidden, ctx.Response().StatusCode())
+	testza.AssertEqual(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
 func TestJWKSRoute_Success(t *testing.T) {
