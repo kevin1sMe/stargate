@@ -425,6 +425,7 @@ func loginAPIHandler(ctx *fiber.Ctx, sessionGetter SessionGetter, authenticator 
 					return SendErrorResponse(ctx, fiber.StatusUnauthorized, i18n.T(ctx, "error.otp_code_invalid"))
 				}
 				metrics.RecordAuthRequest("warden_otp", "success")
+				verifyRespAMR = []string{"warden", "totp"}
 			} else {
 				// Fallback: legacy global OTP secret (WARDEN_OTP_SECRET_KEY)
 				otpSecret := auth.GetOTPSecret()
@@ -439,6 +440,7 @@ func loginAPIHandler(ctx *fiber.Ctx, sessionGetter SessionGetter, authenticator 
 					return SendErrorResponse(ctx, fiber.StatusUnauthorized, i18n.T(ctx, "error.otp_code_invalid"))
 				}
 				metrics.RecordAuthRequest("warden_otp", "success")
+				verifyRespAMR = []string{"warden", "totp"}
 			}
 		} else {
 			// Neither Herald verification nor OTP was used

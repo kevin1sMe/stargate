@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -262,6 +263,110 @@ func TestLoginAPI_WardenUserNotFound(t *testing.T) {
 	err = handler(ctx)
 	testza.AssertNoError(t, err)
 	testza.AssertEqual(t, fiber.StatusUnauthorized, ctx.Response().StatusCode())
+}
+
+func TestLoginAPI_WardenOTP_AllowsTunnelTokenExchange(t *testing.T) {
+	wardenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"phone":   "13800138000",
+			"mail":    "test@example.com",
+			"user_id": "u_test_totp_user",
+			"status":  "active",
+			"scope":   []string{"forward", "admin"},
+			"role":    "admin",
+			"name":    "Test User",
+		})
+	}))
+	defer wardenServer.Close()
+
+	heraldServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/v1/totp/status":
+			testza.AssertEqual(t, "u_test_totp_user", r.URL.Query().Get("subject"))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"subject":      "u_test_totp_user",
+				"totp_enabled": true,
+			})
+		case "/v1/totp/verify":
+			body, err := io.ReadAll(r.Body)
+			testza.AssertNoError(t, err)
+			testza.AssertContains(t, string(body), "\"subject\":\"u_test_totp_user\"")
+			testza.AssertContains(t, string(body), "\"code\":\"123456\"")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer heraldServer.Close()
+
+	t.Setenv("AUTH_HOST", "auth.example.com")
+	t.Setenv("PASSWORDS", "plaintext:test123")
+	t.Setenv("WARDEN_ENABLED", "true")
+	t.Setenv("WARDEN_URL", wardenServer.URL)
+	t.Setenv("HERALD_ENABLED", "true")
+	t.Setenv("HERALD_URL", heraldServer.URL)
+	t.Setenv("HERALD_API_KEY", "test-api-key")
+	t.Setenv("HERALD_TOTP_ENABLED", "true")
+	t.Setenv("TOKEN_SIGNING_KEY", testTokenSigningKey(t))
+	t.Setenv("TOKEN_SIGNING_KID", "test-kid")
+	t.Setenv("TOKEN_ISSUER", "auth.example.com")
+	t.Setenv("TOKEN_ALLOWED_AUDIENCES", "tunnel.mrlin.space")
+	t.Setenv("TOKEN_TOTP_REQUIRED_AUDIENCES", "tunnel.mrlin.space")
+	t.Setenv("TOKEN_MAX_TTL_SECONDS", "900")
+	t.Setenv("TOKEN_DEFAULT_TTL_SECONDS", "300")
+	err := config.Initialize(testLogger())
+	testza.AssertNoError(t, err)
+
+	auth.ResetWardenClientForTesting()
+	ResetHeraldClientForTest()
+	auth.InitWardenClient(testLogger())
+	InitHeraldClient(testLogger())
+
+	store := setupTestStore()
+	app := fiber.New()
+	app.Post("/_login", LoginAPI(store))
+	app.Post("/_token", TokenRoute(store))
+
+	loginReq := httptest.NewRequest("POST", "/_login", strings.NewReader(
+		"auth_method=warden&phone=13800138000&use_otp=true&otp_code=123456",
+	))
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginReq.Header.Set("Accept", "application/json")
+	loginReq.Header.Set("X-Forwarded-Host", "auth.example.com")
+
+	loginResp, err := app.Test(loginReq)
+	testza.AssertNoError(t, err)
+	testza.AssertEqual(t, fiber.StatusOK, loginResp.StatusCode)
+
+	var sessionCookie string
+	for _, cookieHeader := range loginResp.Header.Values("Set-Cookie") {
+		if strings.Contains(cookieHeader, auth.SessionCookieName+"=") {
+			sessionCookie = strings.SplitN(cookieHeader, ";", 2)[0]
+			break
+		}
+	}
+	testza.AssertNotEqual(t, "", sessionCookie)
+
+	tokenReq := httptest.NewRequest("POST", "/_token", strings.NewReader(
+		`{"audience":"tunnel.mrlin.space","scope":["forward"]}`,
+	))
+	tokenReq.Header.Set("Content-Type", "application/json")
+	tokenReq.Header.Set("Accept", "application/json")
+	tokenReq.Header.Set("Cookie", sessionCookie)
+
+	tokenResp, err := app.Test(tokenReq)
+	testza.AssertNoError(t, err)
+	testza.AssertEqual(t, fiber.StatusOK, tokenResp.StatusCode)
 }
 
 func TestLoginRoute_NotAuthenticated(t *testing.T) {
