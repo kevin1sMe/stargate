@@ -186,5 +186,40 @@ func GetForwardAuthHandler() *forwardauth.Handler {
 // ForwardAuthCheckRoute creates a Fiber handler for the ForwardAuth check route.
 // This is the main entry point for Traefik/Nginx ForwardAuth integration.
 func ForwardAuthCheckRoute(store *session.Store) fiber.Handler {
-	return forwardauth.FiberCheckRoute(forwardAuthHandler, store)
+	return func(c *fiber.Ctx) error {
+		// Get session
+		sess, err := store.Get(c)
+		if err != nil {
+			return forwardAuthHandler.HandleSessionError(forwardauth.NewFiberContext(c), err)
+		}
+
+		ctx := forwardauth.NewFiberContext(c)
+
+		// Perform authentication check
+		result, err := forwardAuthHandler.Check(ctx, forwardauth.NewFiberSession(sess))
+		if err != nil {
+			switch err {
+			case forwardauth.ErrNotAuthenticated, forwardauth.ErrInvalidPassword, forwardauth.ErrUserNotFound:
+				return forwardAuthHandler.HandleNotAuthenticated(ctx)
+			case forwardauth.ErrStepUpRequired:
+				return forwardAuthHandler.HandleStepUpRequired(ctx)
+			case forwardauth.ErrSessionRequired:
+				return forwardAuthHandler.HandleNotAuthenticated(ctx)
+			default:
+				return forwardAuthHandler.HandleNotAuthenticated(ctx)
+			}
+		}
+
+		// Set authentication headers
+		forwardAuthHandler.SetAuthHeaders(ctx, result)
+
+		// Touch session to extend expiration (sliding window)
+		sess.SetExpiry(config.SessionExpiration)
+		if err := sess.Save(); err != nil {
+			log.Warn().Err(err).Msg("Failed to touch session")
+		}
+
+		// Return 200 OK for ForwardAuth
+		return c.SendStatus(fiber.StatusOK)
+	}
 }
