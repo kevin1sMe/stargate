@@ -22,6 +22,7 @@ import (
 	session "github.com/soulteary/session-kit"
 	"github.com/soulteary/stargate/src/internal/auth"
 	"github.com/soulteary/stargate/src/internal/config"
+	"github.com/soulteary/stargate/src/internal/deviceauth"
 	"github.com/soulteary/stargate/src/internal/handlers"
 	"github.com/soulteary/stargate/src/internal/i18n"
 	"github.com/soulteary/stargate/src/internal/metrics"
@@ -186,7 +187,7 @@ func setupHealthChecker(redisClient *redis.Client) *health.Aggregator {
 
 // setupRoutes registers all HTTP routes for the application.
 // This includes authentication, login, logout, session exchange, and health check endpoints.
-func setupRoutes(app *fiber.App, store *fibersession.Store, healthAggregator *health.Aggregator) {
+func setupRoutes(app *fiber.App, store *fibersession.Store, redisClient *redis.Client, healthAggregator *health.Aggregator) {
 	log.Debug().Msg("Registering routes")
 	// Initialize ForwardAuth handler
 	handlers.InitForwardAuthHandler(log)
@@ -207,6 +208,15 @@ func setupRoutes(app *fiber.App, store *fibersession.Store, healthAggregator *he
 	app.Get(RouteAuth, handlers.CheckRoute(store))
 	app.Post(RouteToken, handlers.TokenRoute(store))
 	app.Get(RouteJWKS, handlers.JWKSRoute())
+	var deviceStore deviceauth.Store = deviceauth.NewMemoryStore()
+	if redisClient != nil {
+		deviceStore = deviceauth.NewRedisStore(redisClient, "stargate:deviceauth:")
+	}
+	deviceService := deviceauth.NewService(deviceStore, deviceauth.SettingsFromConfig())
+	app.Post(RouteDeviceAuthorization, handlers.DeviceAuthorizationRoute(deviceService))
+	app.Get(RouteDeviceVerification, handlers.DeviceVerificationRoute(deviceService, store))
+	app.Post(RouteDeviceVerification, handlers.DeviceApprovalRoute(deviceService, store))
+	app.Post(RouteOAuthToken, handlers.OAuthTokenRoute(deviceService))
 	// Prometheus metrics endpoint
 	app.Get("/metrics", metricskit.FiberHandlerFor(metrics.Registry))
 
@@ -325,7 +335,7 @@ func createApp() *fiber.App {
 	store, redisClient := setupSessionStore()
 	healthAggregator := setupHealthChecker(redisClient)
 
-	setupRoutes(app, store, healthAggregator)
+	setupRoutes(app, store, redisClient, healthAggregator)
 	setupStaticFiles(app)
 
 	return app

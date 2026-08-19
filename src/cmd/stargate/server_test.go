@@ -211,7 +211,7 @@ func TestSetupRoutes(t *testing.T) {
 
 	// Test that setupRoutes doesn't panic
 	testza.AssertNotPanics(t, func() {
-		setupRoutes(app, store, aggregator)
+		setupRoutes(app, store, nil, aggregator)
 	})
 
 	// Verify routes are registered by testing health endpoint

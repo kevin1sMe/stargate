@@ -18,6 +18,12 @@ const (
 	RouteToken = "/_token"
 	// RouteJWKS is the token public key route
 	RouteJWKS = "/_jwks"
+	// RouteDeviceAuthorization starts an OAuth device authorization request.
+	RouteDeviceAuthorization = "/oauth/device/authorization"
+	// RouteOAuthToken exchanges device and refresh grants for access tokens.
+	RouteOAuthToken = "/oauth/token"
+	// RouteDeviceVerification is the browser-facing device confirmation page.
+	RouteDeviceVerification = "/device"
 	// RouteHealth is the health check route
 	RouteHealth = "/health"
 

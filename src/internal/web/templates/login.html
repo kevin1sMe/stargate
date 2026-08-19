@@ -27,6 +27,9 @@
           {{if .Callback}}
           <input type="hidden" name="callback" value="{{.Callback}}">
           {{end}}
+          {{if .ReturnTo}}
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          {{end}}
           <div class="form-group">
             <label for="password" class="sr-only">Password</label>
             <input

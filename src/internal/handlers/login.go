@@ -149,6 +149,7 @@ func loginAPIHandler(ctx *fiber.Ctx, sessionGetter SessionGetter, authenticator 
 	defer loginSpan.End()
 
 	password := ctx.FormValue("password")
+	returnTo := safeReturnTo(ctx.FormValue("return_to"))
 	authMethod := ctx.FormValue("auth_method") // "password" or "warden"
 	userPhone := auth.NormalizePhone(ctx.FormValue("phone"))
 	userMail := ctx.FormValue("mail")
@@ -551,6 +552,15 @@ func loginAPIHandler(ctx *fiber.Ctx, sessionGetter SessionGetter, authenticator 
 	metrics.RecordSessionCreated()
 	auditlog.LogSessionCreate(ctx.Context(), loggedUserID, ctx.IP())
 
+	if returnTo != "" {
+		if strings.Contains(ctx.Get("Accept"), "application/json") {
+			return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+				"success": true, "redirect": returnTo, "message": i18n.T(ctx, "success.login"),
+			})
+		}
+		return ctx.Redirect(returnTo)
+	}
+
 	// Get callback parameter (priority: cookie, form data, query parameter)
 	callbackFromCookie := GetCallbackFromCookie(ctx)
 	callback := callbackFromCookie
@@ -682,6 +692,7 @@ func loginRouteHandler(ctx *fiber.Ctx, sessionGetter SessionGetter) error {
 	// Get callback parameter (priority: URL query parameter, then cookie)
 	// URL parameter takes priority as it represents the explicit intent of the current request
 	callback := ctx.Query("callback")
+	returnTo := safeReturnTo(ctx.Query("return_to"))
 	if callback == "" {
 		callback = GetCallbackFromCookie(ctx)
 	} else {
@@ -695,6 +706,9 @@ func loginRouteHandler(ctx *fiber.Ctx, sessionGetter SessionGetter) error {
 	}
 
 	if auth.IsAuthenticated(sess) {
+		if returnTo != "" {
+			return ctx.Redirect(returnTo)
+		}
 		// Use X-Forwarded-* headers to build correct redirect URL
 		sessionID := sess.ID()
 		if sessionID == "" {
@@ -727,6 +741,7 @@ func loginRouteHandler(ctx *fiber.Ctx, sessionGetter SessionGetter) error {
 
 	return ctx.Render(templateName, fiber.Map{
 		"Callback":          callback,
+		"ReturnTo":          returnTo,
 		"SessionID":         sess.ID(),
 		"Title":             config.LoginPageTitle.Value,
 		"FooterText":        config.LoginPageFooterText.Value,
@@ -738,6 +753,14 @@ func loginRouteHandler(ctx *fiber.Ctx, sessionGetter SessionGetter) error {
 		"LoginEmailEnabled": config.LoginEmailEnabled.ToBool(),
 		"Debug":             config.Debug.ToBool(),
 	})
+}
+
+func safeReturnTo(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || strings.ContainsAny(value, "\r\n") {
+		return ""
+	}
+	return value
 }
 
 // LoginRoute handles GET requests to /_login for displaying the login page.

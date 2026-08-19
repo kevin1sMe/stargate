@@ -45,6 +45,9 @@
           {{if .Callback}}
           <input type="hidden" name="callback" value="{{.Callback}}">
           {{end}}
+          {{if .ReturnTo}}
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          {{end}}
           <input type="hidden" name="auth_method" value="warden">
           <div class="form-group">
             <label for="phone" class="sr-only">Phone or Email</label>

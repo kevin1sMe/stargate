@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; }
+    main { width: min(32rem, calc(100% - 3rem)); padding: 2rem; border-radius: 1rem; background: #1f2937; box-shadow: 0 1rem 3rem #0008; }
+    h1 { margin-top: 0; }
+    label, input { display: block; width: 100%; box-sizing: border-box; }
+    input { margin: .5rem 0 1rem; padding: .8rem; font: inherit; text-transform: uppercase; }
+    .code { font: 700 1.5rem ui-monospace, monospace; letter-spacing: .12em; }
+    .actions { display: flex; gap: .75rem; margin-top: 1.5rem; }
+    button { border: 0; border-radius: .5rem; padding: .75rem 1rem; font: inherit; cursor: pointer; }
+    .approve { background: #16a34a; color: white; }
+    .deny { background: #4b5563; color: white; }
+    .error { color: #fca5a5; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Device authorization</h1>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  {{if .Lookup}}
+  <form method="get" action="/device">
+    <label>Enter the code shown in your terminal
+      <input name="user_code" autocomplete="one-time-code" placeholder="ABCD-EFGH" required autofocus>
+    </label>
+    <button class="approve" type="submit">Continue</button>
+  </form>
+  {{else if .Complete}}
+  <p>{{if .Message}}{{.Message}}{{else}}This request has already been resolved. You may close this window.{{end}}</p>
+  {{else if .Grant}}
+  <p>Confirm that you started this request in your own terminal.</p>
+  <p class="code">{{.UserCode}}</p>
+  <dl>
+    <dt>Application</dt><dd>{{.ClientID}}</dd>
+    <dt>Audience</dt><dd>{{.Audience}}</dd>
+    <dt>Permissions</dt><dd>{{.Scopes}}</dd>
+  </dl>
+  <p>Only approve codes you generated yourself. An attacker can use a code to trick you into granting access.</p>
+  <form method="post" action="/device">
+    <input type="hidden" name="user_code" value="{{.UserCode}}">
+    <div class="actions">
+      <button class="approve" type="submit" name="decision" value="approve">Allow</button>
+      <button class="deny" type="submit" name="decision" value="deny">Deny</button>
+    </div>
+  </form>
+  {{end}}
+</main>
+</body>
+</html>

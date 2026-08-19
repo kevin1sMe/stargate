@@ -390,6 +390,70 @@ var (
 		PossibleValues: []string{"*"},
 		Validator:      ValidateAny,
 	}
+
+	DeviceAuthEnabled = EnvVariable{
+		Name:           "DEVICE_AUTH_ENABLED",
+		Required:       false,
+		DefaultValue:   "false",
+		PossibleValues: []string{"true", "false"},
+		Validator:      ValidateCaseInsensitivePossibleValues,
+	}
+
+	DeviceAuthClientID = EnvVariable{
+		Name:           "DEVICE_AUTH_CLIENT_ID",
+		Required:       false,
+		DefaultValue:   "stargate-tunnelcli",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthAudience = EnvVariable{
+		Name:           "DEVICE_AUTH_AUDIENCE",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthAllowedScopes = EnvVariable{
+		Name:           "DEVICE_AUTH_ALLOWED_SCOPES",
+		Required:       false,
+		DefaultValue:   "forward",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthVerificationURI = EnvVariable{
+		Name:           "DEVICE_AUTH_VERIFICATION_URI",
+		Required:       false,
+		DefaultValue:   "",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthCodeTTLSeconds = EnvVariable{
+		Name:           "DEVICE_AUTH_CODE_TTL_SECONDS",
+		Required:       false,
+		DefaultValue:   "600",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthPollIntervalSeconds = EnvVariable{
+		Name:           "DEVICE_AUTH_POLL_INTERVAL_SECONDS",
+		Required:       false,
+		DefaultValue:   "5",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
+
+	DeviceAuthRefreshTTLSeconds = EnvVariable{
+		Name:           "DEVICE_AUTH_REFRESH_TTL_SECONDS",
+		Required:       false,
+		DefaultValue:   "86400",
+		PossibleValues: []string{"*"},
+		Validator:      ValidateAny,
+	}
 )
 
 func Initialize(l *logger.Logger) error {
@@ -418,7 +482,7 @@ func Initialize(l *logger.Logger) error {
 	}
 
 	// Then validate all other configuration variables
-	var envVariables = []*EnvVariable{&Debug, &AuthHost, &LoginPageTitle, &LoginPageFooterText, &Passwords, &UserHeaderName, &CookieDomain, &Language, &Port, &WardenURL, &WardenAPIKey, &WardenEnabled, &WardenCacheTTL, &WardenOTPEnabled, &WardenOTPSecretKey, &HeraldURL, &HeraldAPIKey, &HeraldEnabled, &HeraldHMACSecret, &HeraldTLSCACertFile, &HeraldTLSClientCert, &HeraldTLSClientKey, &HeraldTLSServerName, &HeraldTOTPEnabled, &SessionStorageEnabled, &SessionStorageRedisAddr, &SessionStorageRedisPassword, &SessionStorageRedisDB, &SessionStorageRedisKeyPrefix, &AuditLogEnabled, &AuditLogFormat, &StepUpEnabled, &StepUpPaths, &OTLPEnabled, &OTLPEndpoint, &AuthRefreshEnabled, &AuthRefreshInterval, &LoginSMSEnabled, &LoginEmailEnabled, &TokenSigningKey, &TokenSigningKID, &TokenIssuer, &TokenMaxTTLSeconds, &TokenDefaultTTLSeconds, &TokenAllowedAudiences, &TokenTOTPRequiredAudiences}
+	var envVariables = []*EnvVariable{&Debug, &AuthHost, &LoginPageTitle, &LoginPageFooterText, &Passwords, &UserHeaderName, &CookieDomain, &Language, &Port, &WardenURL, &WardenAPIKey, &WardenEnabled, &WardenCacheTTL, &WardenOTPEnabled, &WardenOTPSecretKey, &HeraldURL, &HeraldAPIKey, &HeraldEnabled, &HeraldHMACSecret, &HeraldTLSCACertFile, &HeraldTLSClientCert, &HeraldTLSClientKey, &HeraldTLSServerName, &HeraldTOTPEnabled, &SessionStorageEnabled, &SessionStorageRedisAddr, &SessionStorageRedisPassword, &SessionStorageRedisDB, &SessionStorageRedisKeyPrefix, &AuditLogEnabled, &AuditLogFormat, &StepUpEnabled, &StepUpPaths, &OTLPEnabled, &OTLPEndpoint, &AuthRefreshEnabled, &AuthRefreshInterval, &LoginSMSEnabled, &LoginEmailEnabled, &TokenSigningKey, &TokenSigningKID, &TokenIssuer, &TokenMaxTTLSeconds, &TokenDefaultTTLSeconds, &TokenAllowedAudiences, &TokenTOTPRequiredAudiences, &DeviceAuthEnabled, &DeviceAuthClientID, &DeviceAuthAudience, &DeviceAuthAllowedScopes, &DeviceAuthVerificationURI, &DeviceAuthCodeTTLSeconds, &DeviceAuthPollIntervalSeconds, &DeviceAuthRefreshTTLSeconds}
 
 	for _, variable := range envVariables {
 		err := variable.Validate()
@@ -439,6 +503,24 @@ func Initialize(l *logger.Logger) error {
 	// PASSWORDS is required when not using Warden (password-only mode). When WardenEnabled=true, pure Warden deployment may omit PASSWORDS.
 	if !WardenEnabled.ToBool() && Passwords.Value == "" {
 		return NewValidationError(Passwords.Name, i18n.TStatic("error.config_required_not_set"), Passwords.PossibleValues)
+	}
+
+	if DeviceAuthEnabled.ToBool() {
+		for _, variable := range []*EnvVariable{&DeviceAuthClientID, &DeviceAuthAudience, &DeviceAuthAllowedScopes, &DeviceAuthVerificationURI, &TokenSigningKey, &TokenAllowedAudiences} {
+			if strings.TrimSpace(variable.Value) == "" {
+				return NewValidationError(variable.Name, i18n.TStatic("error.config_required_not_set"), variable.PossibleValues)
+			}
+		}
+		audienceAllowed := false
+		for _, audience := range strings.Split(TokenAllowedAudiences.Value, ",") {
+			if strings.TrimSpace(audience) == strings.TrimSpace(DeviceAuthAudience.Value) {
+				audienceAllowed = true
+				break
+			}
+		}
+		if !audienceAllowed {
+			return NewValidationError(DeviceAuthAudience.Name, DeviceAuthAudience.Value, []string{TokenAllowedAudiences.Value})
+		}
 	}
 
 	// Log language setting
