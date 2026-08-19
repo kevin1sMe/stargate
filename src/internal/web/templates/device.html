@@ -5,18 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}}</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; }
-    main { width: min(32rem, calc(100% - 3rem)); padding: 2rem; border-radius: 1rem; background: #1f2937; box-shadow: 0 1rem 3rem #0008; }
-    h1 { margin-top: 0; }
-    label, input { display: block; width: 100%; box-sizing: border-box; }
-    input { margin: .5rem 0 1rem; padding: .8rem; font: inherit; text-transform: uppercase; }
-    .code { font: 700 1.5rem ui-monospace, monospace; letter-spacing: .12em; }
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; color: #e5e7eb; background: #0f172a; }
+    main { width: min(32rem, calc(100% - 3rem)); padding: 2rem; border: 1px solid #334155; border-radius: 1rem; background: #1e293b; box-shadow: 0 1rem 3rem #02061799; }
+    h1 { margin-top: 0; color: #f8fafc; }
+    p { color: #cbd5e1; line-height: 1.5; }
+    label, input:not([type="hidden"]) { display: block; width: 100%; box-sizing: border-box; }
+    input:not([type="hidden"]) { margin: .5rem 0 1rem; padding: .8rem; border: 1px solid #475569; border-radius: .5rem; color: #f8fafc; background: #0f172a; font: inherit; text-transform: uppercase; }
+    input:focus { border-color: #38bdf8; outline: 2px solid #38bdf84d; }
+    .code { width: fit-content; padding: .6rem .8rem; border: 1px solid #475569; border-radius: .5rem; color: #f8fafc; background: #0f172a; font: 700 1.5rem ui-monospace, monospace; letter-spacing: .12em; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .5rem 1.25rem; margin: 1.5rem 0; }
+    dt { color: #94a3b8; }
+    dd { margin: 0; color: #f8fafc; font-weight: 600; }
     .actions { display: flex; gap: .75rem; margin-top: 1.5rem; }
-    button { border: 0; border-radius: .5rem; padding: .75rem 1rem; font: inherit; cursor: pointer; }
-    .approve { background: #16a34a; color: white; }
-    .deny { background: #4b5563; color: white; }
+    button { border: 0; border-radius: .5rem; padding: .75rem 1rem; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+    .approve { background: #16a34a; }
+    .approve:hover { background: #15803d; }
+    .deny { background: #475569; }
+    .deny:hover { background: #334155; }
     .error { color: #fca5a5; }
+    @media (max-width: 30rem) {
+      main { padding: 1.5rem; }
+      dl { grid-template-columns: 1fr; gap: .25rem; }
+      dd { margin-bottom: .5rem; }
+    }
   </style>
 </head>
 <body>
