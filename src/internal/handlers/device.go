@@ -114,13 +114,16 @@ func OAuthTokenRoute(service *deviceauth.Service) fiber.Handler {
 		switch grantType {
 		case deviceCodeGrantType:
 			response, err = service.ExchangeDevice(ctx.Context(), clientID, ctx.FormValue("device_code"), time.Now())
+			if err != nil {
+				return handleDeviceTokenError(ctx, err, true)
+			}
 		case "refresh_token":
 			response, err = service.ExchangeRefresh(ctx.Context(), clientID, ctx.FormValue("refresh_token"), time.Now())
+			if err != nil {
+				return handleDeviceTokenError(ctx, err, false)
+			}
 		default:
 			return oauthError(ctx, fiber.StatusBadRequest, "unsupported_grant_type", "unsupported grant_type")
-		}
-		if err != nil {
-			return handleDeviceTokenError(ctx, err)
 		}
 		ctx.Set(fiber.HeaderCacheControl, "no-store")
 		ctx.Set(fiber.HeaderPragma, "no-cache")
@@ -128,7 +131,7 @@ func OAuthTokenRoute(service *deviceauth.Service) fiber.Handler {
 	}
 }
 
-func handleDeviceTokenError(ctx *fiber.Ctx, err error) error {
+func handleDeviceTokenError(ctx *fiber.Ctx, err error, deviceGrant bool) error {
 	switch {
 	case errors.Is(err, deviceauth.ErrAuthorizationWait):
 		return oauthError(ctx, fiber.StatusBadRequest, "authorization_pending", "authorization is still pending")
@@ -136,7 +139,7 @@ func handleDeviceTokenError(ctx *fiber.Ctx, err error) error {
 		return oauthError(ctx, fiber.StatusBadRequest, "slow_down", "polling too quickly")
 	case errors.Is(err, deviceauth.ErrAccessDenied):
 		return oauthError(ctx, fiber.StatusBadRequest, "access_denied", "authorization was denied")
-	case errors.Is(err, deviceauth.ErrExpired), errors.Is(err, deviceauth.ErrAlreadyConsumed):
+	case errors.Is(err, deviceauth.ErrExpired), errors.Is(err, deviceauth.ErrAlreadyConsumed), deviceGrant && errors.Is(err, deviceauth.ErrNotFound):
 		return oauthError(ctx, fiber.StatusBadRequest, "expired_token", "device code expired or was already used")
 	case errors.Is(err, deviceauth.ErrInvalidClient):
 		return oauthError(ctx, fiber.StatusBadRequest, "invalid_client", "unknown device client")
